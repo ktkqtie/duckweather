@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>duckweather</title>
+  <meta name="description" content="Weather, as told by a duck." />
+  <link rel="icon" href="assets/ducks/duck-55.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..700,100&family=Outfit:wght@300..600&family=Caveat:wght@500;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <a class="wordmark" href="./">duck<span>weather</span></a>
+      <div class="actions">
+        <button class="icon-btn" id="unit-btn" type="button" aria-label="Switch to Celsius" title="Switch units">°F</button>
+        <button class="icon-btn" id="locate-btn" type="button" aria-label="Use my location" title="Use my location">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" class="fill"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg>
+        </button>
+        <div class="bell-wrap">
+          <button class="icon-btn" id="bell-btn" type="button" aria-label="Weather heads-ups" aria-expanded="false" aria-controls="alerts" title="Heads-ups">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg>
+            <span class="dot" id="bell-dot" hidden></span>
+          </button>
+          <div class="popover" id="alerts" role="dialog" aria-label="Heads-ups" hidden>
+            <p class="popover-title">heads-ups</p>
+            <ul id="alerts-list"></ul>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="place" aria-live="polite">
+        <h1 id="city">New York</h1>
+        <p id="area">Queens</p>
+      </section>
+
+      <section class="hero">
+        <div class="duck-side">
+          <div class="bubble" id="advice">wear a hoodie!</div>
+          <img class="duck" id="duck" alt="The weather duck" width="900" height="1063" />
+          <p class="dateline"><span>today</span><span id="date">—</span></p>
+        </div>
+        <div class="now">
+          <p class="temp"><span id="temp">--</span><span class="deg">°</span></p>
+          <p class="feel"><span class="cond-icon" id="cond-icon"></span><span id="feel">loading…</span></p>
+          <p class="cond" id="cond"></p>
+          <p class="hilo"><span>H: <b id="hi">--</b>°</span><span>L: <b id="lo">--</b>°</span></p>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card forecast">
+          <h2>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+            6 day forecast
+          </h2>
+          <ol id="days"></ol>
+        </article>
+
+        <div class="stack">
+          <article class="card hourly">
+            <h2>hourly temperature</h2>
+            <div class="chart" id="chart"></div>
+          </article>
+
+          <article class="card meter-card">
+            <div class="row-head">
+              <h2>air quality</h2>
+              <p class="big" id="aqi">--</p>
+            </div>
+            <div class="meter aqi-meter"><span class="knob" id="aqi-knob"></span></div>
+            <p class="sub" id="aqi-label">&nbsp;</p>
+          </article>
+
+          <div class="pair">
+            <article class="card small">
+              <h2>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7"/></svg>
+                wind
+              </h2>
+              <p class="big"><span id="wind">--</span> <small>m/s</small></p>
+              <p class="sub"><span class="arrow" id="wind-arrow">↑</span> <span id="wind-dir">&nbsp;</span></p>
+            </article>
+            <article class="card small meter-card">
+              <div class="row-head">
+                <h2>uv</h2>
+                <p class="big" id="uv">--</p>
+              </div>
+              <div class="meter uv-meter"><span class="knob" id="uv-knob"></span></div>
+              <p class="sub" id="uv-label">&nbsp;</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p id="status">weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>
+    </footer>
+  </div>
+
+  <script src="ducks.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
