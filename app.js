@@ -18,7 +18,7 @@ const state = {
   place: store.get("dw.place") || DEFAULT_PLACE,
   weather: null,
   aqi: null,
-  duckBand: null,
+  duckKey: null,
 };
 
 /* ---------- icons ---------- */
@@ -200,7 +200,7 @@ function render() {
   $("hi").textContent = toUnit(daily.temperature_2m_max[0]);
   $("lo").textContent = toUnit(daily.temperature_2m_min[0]);
   $("date").textContent = `${MONTHS[now.m - 1]} ${now.day}`;
-  renderDuck(current.temperature_2m);
+  renderDuck(current.temperature_2m, current.weather_code);
 
   // cards
   renderDays(daily);
@@ -228,14 +228,14 @@ function render() {
   renderAlerts();
 }
 
-function renderDuck(tempF) {
-  const duck = duckForTemp(tempF);
+function renderDuck(tempF, weatherCode) {
+  const duck = pickDuck(tempF, weatherCode);
   const img = $("duck");
   const bubble = $("advice");
   bubble.textContent = duck.advice;
-  img.alt = `The weather duck, dressed for ${Math.round(tempF)}°F`;
-  if (duck.band === state.duckBand) return;
-  state.duckBand = duck.band;
+  img.alt = duck.key === "rain" ? "The weather duck under an umbrella" : `The weather duck, dressed for ${Math.round(tempF)}°F`;
+  if (duck.key === state.duckKey) return;
+  state.duckKey = duck.key;
   img.src = duck.img;
   // replay entrance animations
   for (const el of [img, bubble]) {

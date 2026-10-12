@@ -1,10 +1,11 @@
 // One duck per 5°F band, 0°F through 100°F. Each band covers its starting
 // degree up to (not including) the next one: 55 means 55–59.9°F.
-// Below 0 uses the 0 duck; 100 and above uses the 100 duck.
+// Below 0 uses the 0–5 duck; 95 and above uses the 95–100 duck.
 //
-// `img: null` means that band hasn't been drawn yet. It borrows the nearest
-// drawn duck below it. To add one, save a transparent PNG as
-// assets/ducks/duck-<band>.png and set its `img`.
+// When it's raining, the rain duck shows instead, whatever the temperature.
+//
+// Source art lives in assets/bbs/ (named like 55-60.png); the files here in
+// assets/ducks/ are the cropped, resized web copies (see README).
 
 const duck = (band) => `assets/ducks/duck-${band}.png`;
 
@@ -23,18 +24,23 @@ const DUCKS = {
   55:  { img: duck(55), advice: "beanie + a light scarf" },
   60:  { img: duck(60), advice: "trench coat weather" },
   65:  { img: duck(65), advice: "light jacket's plenty" },
-  70:  { img: null, advice: "t-shirt weather :)" },
-  75:  { img: null, advice: "perfect day for a walk" },
-  80:  { img: null, advice: "shorts & sunnies!" },
-  85:  { img: null, advice: "sunscreen, friend" },
-  90:  { img: null, advice: "drink lots of water!" },
-  95:  { img: null, advice: "find some shade" },
-  100: { img: null, advice: "too hot. pond time." },
+  70:  { img: duck(70), advice: "cardigan + a cute bow" },
+  75:  { img: duck(75), advice: "overalls + sunnies!" },
+  80:  { img: duck(80), advice: "sun hat & breezy clothes" },
+  85:  { img: duck(85), advice: "bandana + shorts!" },
+  90:  { img: duck(90), advice: "tank top. hydrate!" },
+  95:  { img: duck(95), advice: "too hot for a shirt!" },
 };
 
-function duckForTemp(tempF) {
-  const band = Math.min(100, Math.max(0, Math.floor(tempF / 5) * 5));
-  let drawn = band;
-  while (drawn > 0 && !DUCKS[drawn].img) drawn -= 5;
-  return { band, advice: DUCKS[band].advice, img: DUCKS[drawn].img };
+const RAIN_DUCK = { img: "assets/ducks/duck-rain.png", advice: "grab an umbrella!" };
+
+// WMO weather codes: drizzle, rain (incl. freezing), rain showers, thunderstorms.
+function isRaining(code) {
+  return (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
+}
+
+function pickDuck(tempF, weatherCode) {
+  if (isRaining(weatherCode)) return { key: "rain", ...RAIN_DUCK };
+  const band = Math.min(95, Math.max(0, Math.floor(tempF / 5) * 5));
+  return { key: band, ...DUCKS[band] };
 }
