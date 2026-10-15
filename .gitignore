@@ -1,3 +1,9 @@
 .DS_Store
 assets/bbs/
 duc.png
+# demo video render leftovers (stills, raw video, audio)
+brag-output/work/*.png
+brag-output/work/*.mp4
+brag-output/work/*.wav
+brag-output/work/*.log
+brag-output/work/review/

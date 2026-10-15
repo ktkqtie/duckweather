@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>duckweather brag</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,100..700,100&family=Outfit:wght@300..600&family=Caveat:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5ede1; --surface: #fbf6ee; --surface-2: #f3e9da; --ink: #33261d; --ink-2: #6e5c4e;
+    --muted: #a08e7e; --line: #e6d9c7; --accent: #cf6a40; --accent-soft: #f2d9c6;
+    --sky-top: #b3d1ea; --sky-mid: #dde6e4; --cloud-rim: #fdfbec; --cloud-body: #d4d9d8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: "Outfit", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+
+  /* backdrop: the app's own sky */
+  #backdrop { position: absolute; inset: -80px; background: linear-gradient(180deg, #b3d1ea 0%, #b3d1ea 12%, var(--sky-mid) 45%, var(--bg) 85%); }
+  .bcloud { position: absolute; overflow: visible; opacity: .9; }
+
+  /* world = the browser window, moved by the camera */
+  #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  #win { position: relative; width: 1280px; border-radius: 22px; overflow: hidden; background: var(--bg);
+         box-shadow: 0 2px 0 rgba(80,55,35,.05), 0 40px 90px -30px rgba(60,40,25,.45), 0 0 0 1px rgba(80,55,35,.10); }
+  #chrome { height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 18px; background: #efe5d6; border-bottom: 1px solid var(--line); }
+  #chrome i { width: 13px; height: 13px; border-radius: 50%; display: block; }
+  #url { margin: 0 auto; transform: translateX(-30px); display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 16px; border-radius: 15px; background: var(--surface); color: var(--ink-2); font-size: 14px; }
+  #url img { width: 18px; height: 18px; object-fit: contain; }
+  #app { display: block; border: 0; width: 1280px; }
+
+  /* cursor and its cues */
+  #cursor { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 20; }
+  #cursor .halo { position: absolute; left: -34px; top: -34px; width: 68px; height: 68px; border-radius: 50%; background: radial-gradient(circle, rgba(207,106,64,.28), rgba(207,106,64,0) 70%); }
+  #cursor svg { position: absolute; left: -3px; top: -2px; width: 34px; height: 34px; filter: drop-shadow(0 3px 4px rgba(40,25,15,.35)); transform-origin: 3px 2px; }
+  .ripple { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 19; }
+  .ripple i { position: absolute; border-radius: 50%; border: 3px solid var(--accent); }
+
+  /* step captions */
+  #caption { pointer-events: none; min-width: 480px; position: absolute; left: 56px; top: 52px; transform-origin: 0 50%; z-index: 30; display: flex; align-items: center; gap: 18px;
+             padding: 16px 30px 16px 16px; border-radius: 999px; background: rgba(251,246,238,.96);
+             box-shadow: 0 18px 40px -18px rgba(60,40,25,.5), 0 0 0 1px rgba(80,55,35,.08); white-space: nowrap; }
+  #caption .n { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font: 600 24px "Outfit"; }
+  #caption .n.ico { background: #f2d9c6; overflow: hidden; }
+  #caption .n img { width: 40px; height: 47px; margin-top: 8px; }
+  #caption .t { font: 400 34px "Outfit"; letter-spacing: -0.01em; }
+  #caption .t em { font-family: "Fraunces"; font-variation-settings: "SOFT" 100; font-style: italic; color: var(--accent); }
+
+  /* all-ducks scene */
+  #ducks { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+  #ducks .wash { position: absolute; inset: 0; background: linear-gradient(180deg, #f8f1e6, var(--bg)); }
+  #ducks h2 { position: absolute; left: 0; right: 0; top: 70px; margin: 0; text-align: center; font: 300 66px "Fraunces"; font-variation-settings: "SOFT" 100, "opsz" 144; letter-spacing: -0.02em; }
+  #ducks h2 em { color: var(--accent); }
+  .cell { position: absolute; width: 200px; height: 270px; }
+  .cell img { position: absolute; left: 25px; top: 0; width: 150px; height: 177px; transform-origin: 50% 95%; filter: drop-shadow(0 8px 8px rgba(80,55,35,.16)); }
+  .cell b { position: absolute; left: 0; right: 0; top: 186px; text-align: center; font: 400 34px "Fraunces"; font-variation-settings: "SOFT" 100; letter-spacing: -0.02em; }
+  .cell b small { font-size: .6em; vertical-align: .55em; margin-left: 1px; }
+  #therm { position: absolute; left: 180px; right: 180px; height: 10px; border-radius: 5px; top: 1000px;
+           background: linear-gradient(90deg, #8fb0c6, #9bc3c8 25%, #e2c15a 55%, #e2a13a 75%, #cf6a40); }
+  #therm i { position: absolute; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; background: var(--surface); border: 4px solid var(--ink); }
+  #flyduck { pointer-events: none; position: absolute; left: 0; top: 0; transform-origin: 0 0; z-index: 12; filter: drop-shadow(0 14px 12px rgba(80,55,35,.16)); }
+
+  /* outro */
+  #outro { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; pointer-events: none; }
+  #outro .bg { position: absolute; inset: 0; background: linear-gradient(180deg, #b3d1ea 0%, var(--sky-mid) 42%, var(--bg) 80%); }
+  #outro .lock { position: relative; display: flex; align-items: center; gap: 40px; }
+  #outro img { width: 300px; height: 354px; filter: drop-shadow(0 18px 14px rgba(80,55,35,.18)); transform-origin: 50% 95%; }
+  #outro .wm { font-family: "Fraunces"; font-variation-settings: "SOFT" 100; font-weight: 400; font-size: 150px; letter-spacing: -0.02em; color: var(--ink-2); line-height: 1; }
+  #outro .wm span { color: var(--accent); font-style: italic; }
+  #outro .wm { letter-spacing: -0.01em; }
+  #endmark { position: absolute; left: 0; top: 0; z-index: 41; transform-origin: 0 0; pointer-events: none; opacity: 0; white-space: nowrap;
+             font-family: "Fraunces"; font-variation-settings: "SOFT" 100; font-weight: 400; font-size: 22px; line-height: 1.45; letter-spacing: -0.01em; color: var(--ink-2); }
+  #endmark span { color: var(--accent); font-style: italic; }
+  #outro p { margin: 22px 0 0 6px; font: 300 44px "Outfit"; color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="backdrop">
+    <svg width="0" height="0" style="position:absolute"><defs>
+      <g id="pb"><circle cx="62" cy="64" r="26"/><circle cx="96" cy="46" r="36"/><circle cx="134" cy="58" r="28"/><circle cx="164" cy="72" r="20"/><circle cx="36" cy="76" r="17"/><circle cx="112" cy="76" r="24"/><circle cx="80" cy="80" r="20"/><circle cx="182" cy="82" r="12"/><circle cx="20" cy="86" r="10"/></g>
+      <symbol id="cb" viewBox="0 0 200 110"><use style="fill:var(--cloud-rim)" href="#pb" x="-3" y="-6"/><use style="fill:var(--cloud-body)" href="#pb"/></symbol>
+    </defs></svg>
+    <svg class="bcloud" id="bc1" style="left:40px;top:120px;width:380px;height:209px"><use href="#cb"/></svg>
+    <svg class="bcloud" id="bc2" style="left:1560px;top:60px;width:300px;height:165px"><use href="#cb"/></svg>
+    <svg class="bcloud" id="bc3" style="left:1600px;top:640px;width:340px;height:187px;opacity:.6"><use href="#cb"/></svg>
+  </div>
+
+  <div id="world">
+    <div id="win">
+      <div id="chrome">
+        <i style="background:#e7826b"></i><i style="background:#e9b85a"></i><i style="background:#9bbf72"></i>
+        <div id="url"><img src="/app/assets/ducks/duck-55.png" alt="">duckweather</div>
+      </div>
+      <iframe id="app" src="/app/index.html" scrolling="no"></iframe>
+    </div>
+  </div>
+
+  <div id="ripples"></div>
+  <div id="ducks" style="opacity:0"><div class="wash"></div><h2></h2><div id="therm"><i></i></div></div>
+  <img id="flyduck" alt="" style="opacity:0" />
+  <div id="cursor"><div class="halo"></div>
+    <svg viewBox="0 0 24 24"><path d="M3 2 L3 19.5 L7.6 15.4 L10.6 22 L13.7 20.6 L10.8 14.2 L17 14.2 Z" fill="#33261d" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  </div>
+  <div id="caption" style="opacity:0"><span class="n"></span><span class="t"></span></div>
+  <div id="outro" style="opacity:0"><div class="bg"></div>
+    <div class="lock"><img src="/app/assets/ducks/duck-45.png" alt="">
+      <div><div class="wm">duck<span>weather</span></div><p>Weather, as told by a duck.</p></div>
+    </div>
+  </div>
+  <div id="endmark">duck<span>weather</span></div>
+</div>
+<script src="timeline.js"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+I made a weather app where the forecast is a duck's outfit. 21 hand-drawn ducks: one for every 5°F from 0 to 100, plus one with an umbrella for rainy days. Pick a city, tap a day, and see what the duck is wearing.
