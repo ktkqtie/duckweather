@@ -12,7 +12,7 @@ Then open http://localhost:8642. Use a local server rather than opening the file
 
 ## Ducks
 
-Each 5°F band has its own duck: `assets/ducks/duck-55.png` shows for 55–59.9°F. When it's raining, `duck-rain.png` shows instead. Speech-bubble text for each duck is in `ducks.js`.
+Each 5°F band has its own duck: `assets/ducks/duck-55.png` shows for 55–59.9°F. When it's raining, `duck-rain.png` shows instead. Each duck also has a short outfit note in `ducks.js` (not shown on the page right now).
 
 The full-size source art lives in `assets/bbs/` (named like `55-60.png` and `rain.png`, all on the same 1640×2360 canvas). It's kept out of git. To regenerate the web copies after changing a drawing:
 

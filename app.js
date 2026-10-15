@@ -18,6 +18,8 @@ const state = {
   place: store.get("dw.place") || DEFAULT_PLACE,
   weather: null,
   aqi: null,
+  aqiHourly: null,
+  day: 0, // which forecast day is shown (0 = today, live)
   duckKey: null,
 };
 
@@ -117,7 +119,7 @@ async function fetchWeather({ lat, lon }) {
     longitude: lon,
     current: "temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,is_day",
     hourly: "temperature_2m,uv_index",
-    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,wind_speed_10m_max,wind_direction_10m_dominant",
     temperature_unit: "fahrenheit",
     wind_speed_unit: "ms",
     timezone: "auto",
@@ -129,11 +131,11 @@ async function fetchWeather({ lat, lon }) {
 }
 
 async function fetchAirQuality({ lat, lon }) {
-  const params = new URLSearchParams({ latitude: lat, longitude: lon, current: "us_aqi", timezone: "auto" });
+  const params = new URLSearchParams({ latitude: lat, longitude: lon, current: "us_aqi", hourly: "us_aqi", forecast_days: "6", timezone: "auto" });
   const res = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${params}`);
   if (!res.ok) throw new Error(`air quality ${res.status}`);
   const data = await res.json();
-  return data.current?.us_aqi ?? null;
+  return { now: data.current?.us_aqi ?? null, hourly: data.hourly ?? null };
 }
 
 async function reverseGeocode(lat, lon) {
@@ -155,7 +157,8 @@ async function load() {
       fetchAirQuality(state.place).catch(() => null),
     ]);
     state.weather = weather;
-    state.aqi = aqi;
+    state.aqi = aqi?.now ?? null;
+    state.aqiHourly = aqi?.hourly ?? null;
     render();
     setStatus(`updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>`);
   } catch (err) {
@@ -184,42 +187,53 @@ function render() {
   const w = state.weather;
   if (!w) return;
   const { current, daily, hourly } = w;
-  const now = parseLocal(current.time);
+  // the hero and cards show the picked day; day 0 is the live "right now" view
+  const day = Math.min(state.day, daily.time.length - 1);
+  const live = day === 0;
   const idx = currentHourIndex(w);
+  const date = parseLocal(daily.time[day]);
 
   $("city").textContent = state.place.city;
   $("area").textContent = state.place.area;
   document.title = `${Math.round(toUnit(current.temperature_2m))}° ${state.place.city} · duckweather`;
 
-  // hero
-  const cond = describeCode(current.weather_code, current.is_day === 1);
-  $("temp").textContent = toUnit(current.temperature_2m);
+  // hero: right now for today, the forecast high for other days
+  const temp = live ? current.temperature_2m : daily.temperature_2m_max[day];
+  const code = live ? current.weather_code : daily.weather_code[day];
+  const cond = describeCode(code, live ? current.is_day === 1 : true);
+  $("temp").textContent = toUnit(temp);
   $("cond-icon").innerHTML = icon(cond.icon, "");
-  $("feel").textContent = feelWord(current.temperature_2m);
+  $("feel").textContent = feelWord(temp);
   $("cond").textContent = cond.text;
-  $("hi").textContent = toUnit(daily.temperature_2m_max[0]);
-  $("lo").textContent = toUnit(daily.temperature_2m_min[0]);
-  $("date").textContent = `${MONTHS[now.m - 1]} ${now.day}`;
-  renderDuck(current.temperature_2m, current.weather_code);
+  $("hi").textContent = toUnit(daily.temperature_2m_max[day]);
+  $("lo").textContent = toUnit(daily.temperature_2m_min[day]);
+  $("day-name").textContent = live ? "today" : WEEKDAYS[date.weekday];
+  $("date").textContent = `${MONTHS[date.m - 1]} ${date.day}`;
+  updateDayNight(w);
+  renderDuck(temp, code);
 
   // cards
-  renderDays(daily);
-  renderChart(hourly.time.slice(0, 24), hourly.temperature_2m.slice(0, 24), idx < 24 ? idx : -1);
+  renderDays(daily, day);
+  if (live) renderChart(hourly.time.slice(0, 24), hourly.temperature_2m.slice(0, 24), idx < 24 ? idx : -1, "today");
+  else renderChart(hourly.time.slice(day * 24, day * 24 + 24), hourly.temperature_2m.slice(day * 24, day * 24 + 24), -1, `on ${WEEKDAYS[date.weekday]}`);
 
-  const uv = hourly.uv_index[idx] ?? 0;
+  const uv = (live ? hourly.uv_index[idx] : daily.uv_index_max?.[day]) ?? 0;
   $("uv").textContent = Math.round(uv);
   $("uv-knob").style.left = `${Math.min(100, (uv / 11) * 100)}%`;
   $("uv-label").textContent = uvLabel(uv);
 
-  $("wind").textContent = current.wind_speed_10m.toFixed(1);
+  const windSpeed = live ? current.wind_speed_10m : daily.wind_speed_10m_max?.[day] ?? 0;
+  const windFrom = live ? current.wind_direction_10m : daily.wind_direction_10m_dominant?.[day] ?? 0;
+  $("wind").textContent = windSpeed.toFixed(1);
   // wind_direction is where it blows FROM; the arrow points where it's going
-  $("wind-arrow").style.transform = `rotate(${current.wind_direction_10m + 180}deg)`;
-  $("wind-dir").textContent = `from the ${compass(current.wind_direction_10m)}`;
+  $("wind-arrow").style.transform = `rotate(${windFrom + 180}deg)`;
+  $("wind-dir").textContent = `from the ${compass(windFrom)}`;
 
-  if (state.aqi != null) {
-    $("aqi").textContent = Math.round(state.aqi);
-    $("aqi-knob").style.left = `${Math.min(100, (state.aqi / 300) * 100)}%`;
-    $("aqi-label").textContent = aqiLabel(state.aqi);
+  const aqi = live ? state.aqi : dayAqi(daily.time[day]);
+  if (aqi != null) {
+    $("aqi").textContent = Math.round(aqi);
+    $("aqi-knob").style.left = `${Math.min(100, (aqi / 300) * 100)}%`;
+    $("aqi-label").textContent = aqiLabel(aqi) + (live ? "" : " at worst");
   } else {
     $("aqi").textContent = "--";
     $("aqi-label").textContent = "not available here";
@@ -228,31 +242,90 @@ function render() {
   renderAlerts();
 }
 
+// worst hourly air quality forecast on a given date (YYYY-MM-DD)
+function dayAqi(date) {
+  const h = state.aqiHourly;
+  if (!h) return null;
+  const vals = h.time.map((t, i) => (t.startsWith(date) ? h.us_aqi[i] : null)).filter((v) => v != null);
+  return vals.length ? Math.max(...vals) : null;
+}
+
 function renderDuck(tempF, weatherCode) {
   const duck = pickDuck(tempF, weatherCode);
   const img = $("duck");
-  const bubble = $("advice");
-  bubble.textContent = duck.advice;
   img.alt = duck.key === "rain" ? "The weather duck under an umbrella" : `The weather duck, dressed for ${Math.round(tempF)}°F`;
   if (duck.key === state.duckKey) return;
   state.duckKey = duck.key;
   img.src = duck.img;
-  // replay entrance animations
-  for (const el of [img, bubble]) {
-    el.classList.remove("swap");
-    void el.offsetWidth;
-  }
-  img.classList.add("swap");
-  bubble.style.animation = "none";
-  void bubble.offsetWidth;
-  bubble.style.animation = "";
+  buildBlink(duck);
+  // replay the entrance animation
+  const pop = $("duck-pop");
+  pop.classList.remove("swap");
+  void pop.offsetWidth;
+  pop.classList.add("swap");
 }
 
-$("duck").addEventListener("animationend", (e) => {
-  if (e.animationName === "swap") e.target.classList.remove("swap");
+$("duck-pop").addEventListener("animationend", (e) => {
+  if (e.animationName === "swap") e.currentTarget.classList.remove("swap");
 });
 
-function renderDays(daily) {
+/* ---------- blinking ---------- */
+
+const DUCK_W = 900;
+const DUCK_H = 1062;
+const pct = (v, of) => `${(v / of) * 100}%`;
+
+// For each eye: a lid (face-colored oval over the drawn eye) and, on top, a copy of the
+// duck image clipped to just that eye. At rest the copy looks exactly like the drawing;
+// a blink squashes it. Nothing is added until the copies have loaded, so the duck is
+// never shown without eyes.
+async function buildBlink(duck) {
+  const box = $("blink");
+  box.replaceChildren();
+  const spec = BLINKS[duck.key];
+  if (!spec) return;
+  const parts = [];
+  const eyes = [];
+  for (const e of spec.eyes) {
+    const lid = document.createElement("span");
+    lid.className = "lid";
+    Object.assign(lid.style, {
+      left: pct(e.x, DUCK_W), top: pct(e.y, DUCK_H),
+      width: pct(e.w, DUCK_W), height: pct(e.h, DUCK_H),
+      background: spec.face,
+    });
+    const eye = document.createElement("img");
+    eye.className = "eye";
+    eye.src = duck.img;
+    eye.alt = "";
+    eye.style.clipPath = `inset(${pct(e.y, DUCK_H)} ${pct(DUCK_W - e.x - e.w, DUCK_W)} ${pct(DUCK_H - e.y - e.h, DUCK_H)} ${pct(e.x, DUCK_W)})`;
+    eye.style.transformOrigin = `${pct(e.x + e.w / 2, DUCK_W)} ${pct(e.y + e.h / 2, DUCK_H)}`;
+    parts.push(lid, eye);
+    eyes.push(eye);
+  }
+  try {
+    await Promise.all([$("duck"), ...eyes].map((img) => img.decode()));
+  } catch {
+    return;
+  }
+  if (state.duckKey === duck.key) box.replaceChildren(...parts);
+}
+
+// Same blink as the portfolio duck (a little more often: every 1.5–3.5s).
+function blink() {
+  for (const eye of $("blink").querySelectorAll(".eye")) {
+    eye.animate(
+      [{ transform: "scaleY(1)" }, { transform: "scaleY(0.08)", offset: 0.45 }, { transform: "scaleY(1)" }],
+      { duration: 170, easing: "ease-in-out" }
+    );
+  }
+}
+
+function blinkLoop() {
+  setTimeout(() => { blink(); blinkLoop(); }, 1500 + Math.random() * 2000);
+}
+
+function renderDays(daily, selected = 0) {
   const allMin = Math.min(...daily.temperature_2m_min);
   const allMax = Math.max(...daily.temperature_2m_max);
   const span = Math.max(1, allMax - allMin);
@@ -265,30 +338,40 @@ function renderDays(daily) {
       const left = ((lo - allMin) / span) * 100;
       const width = ((hi - lo) / span) * 100;
       const rain = daily.precipitation_probability_max?.[i];
-      return `<li class="day${i === 0 ? " today" : ""}" title="${c.text}">
-        <span class="name">${i === 0 ? "today" : WEEKDAYS[d.weekday]}</span>
+      const name = i === 0 ? "today" : WEEKDAYS[d.weekday];
+      return `<li><button type="button" class="day${i === selected ? " selected" : ""}" data-i="${i}" aria-pressed="${i === selected}" title="${c.text}" aria-label="${name}: ${c.text}, ${toUnit(lo)}° to ${toUnit(hi)}°">
+        <span class="name">${name}</span>
         ${icon(c.icon)}
         <span class="lo">${toUnit(lo)}°</span>
         <span class="range"><span style="left:${left}%;width:${Math.max(width, 4)}%"></span></span>
         <span class="hi">${toUnit(hi)}°</span>
-      </li>`;
+      </button></li>`;
     })
     .join("");
 }
+
+// pressing a day shows it up top; "today" goes back to the live view
+$("days").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-i]");
+  if (!btn) return;
+  state.day = +btn.dataset.i;
+  render();
+  $("days").querySelector(`[data-i="${state.day}"]`)?.focus(); // the rows were redrawn
+});
 
 /* ---------- hourly chart ---------- */
 
 let chartData = null;
 
-function renderChart(times, temps, nowIdx) {
-  chartData = { times, temps, nowIdx };
+function renderChart(times, temps, nowIdx, label = "today") {
+  chartData = { times, temps, nowIdx, label };
   drawChart();
 }
 
 function drawChart() {
   if (!chartData) return;
   const el = $("chart");
-  const { times, temps, nowIdx } = chartData;
+  const { times, temps, nowIdx, label } = chartData;
   const W = el.clientWidth;
   const H = el.clientHeight;
   if (!W || !H) return;
@@ -321,7 +404,7 @@ function drawChart() {
   const yTicks = [min, Math.round((min + max) / 2), max].filter((v, i, a) => a.indexOf(v) === i);
 
   el.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Hourly temperature today, from ${min}° to ${max}°">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Hourly temperature ${label}, from ${min}° to ${max}°">
       <defs>
         <linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="var(--accent)" stop-opacity=".22"/>
@@ -373,7 +456,7 @@ function drawChart() {
 
 new ResizeObserver(() => drawChart()).observe($("chart"));
 
-/* ---------- heads-ups (bell) ---------- */
+/* ---------- heads-up (bell) ---------- */
 
 function buildAlerts() {
   const w = state.weather;
@@ -410,6 +493,7 @@ function toggleAlerts(open) {
 
 $("bell-btn").addEventListener("click", (e) => {
   e.stopPropagation();
+  togglePlaces(false);
   toggleAlerts();
 });
 document.addEventListener("click", (e) => {
@@ -434,25 +518,189 @@ $("unit-btn").addEventListener("click", () => {
   render();
 });
 
+/* ---------- day / night ---------- */
+
+// The page is light while the sun is up at the place being shown and dark after it
+// sets, switching right at sunrise and sunset (not just on the next refresh).
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+let sunTimer;
+
+// Sunrises and sunsets as [timestamp, theme], soonest first. The API gives them in the
+// place's local time, so shift by its UTC offset to get real moments.
+function sunEvents(w) {
+  const at = (local) => Date.parse(`${local}Z`) - w.utc_offset_seconds * 1000;
+  return [
+    ...(w.daily.sunrise || []).map((t) => [at(t), "light"]),
+    ...(w.daily.sunset || []).map((t) => [at(t), "dark"]),
+  ].filter(([t]) => Number.isFinite(t)).sort((a, b) => a[0] - b[0]);
+}
+
+function themeAt(w, time) {
+  const events = sunEvents(w);
+  const past = events.filter(([t]) => t <= time);
+  if (past.length) return past[past.length - 1][1];
+  if (events.length) return events[0][1] === "light" ? "dark" : "light"; // before the first sunrise
+  return w.current.is_day ? "light" : "dark"; // no sunrise/sunset (polar day or night)
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (root.dataset.theme === theme) return;
+  const apply = () => {
+    root.dataset.theme = theme;
+    store.set("dw.theme", theme);
+  };
+  // fade the whole page over, unless this is the very first theme being set
+  if (root.dataset.theme && document.startViewTransition && !reducedMotion.matches) document.startViewTransition(apply);
+  else apply();
+}
+
+function updateDayNight(w) {
+  applyTheme(themeAt(w, Date.now()));
+  clearTimeout(sunTimer);
+  const next = sunEvents(w).find(([t]) => t > Date.now());
+  if (next) {
+    sunTimer = setTimeout(() => {
+      applyTheme(next[1]);
+      updateDayNight(w);
+    }, Math.min(next[0] - Date.now() + 1000, 2 ** 31 - 1));
+  }
+}
+
 /* ---------- location ---------- */
 
-$("locate-btn").addEventListener("click", () => {
+// The location button opens a small "where to?" panel: search any city (Open-Meteo's
+// geocoder), pick a recent place, or use the device's location.
+const RECENTS_KEY = "dw.recent";
+let searchTimer;
+let searchSeq = 0;
+
+function setPlace(place) {
+  state.place = place;
+  state.day = 0;
+  store.set("dw.place", place);
+  const recents = (store.get(RECENTS_KEY) || []).filter((p) => !(p.city === place.city && p.area === place.area));
+  store.set(RECENTS_KEY, [place, ...recents].slice(0, 4));
+  togglePlaces(false);
+  load();
+}
+
+function togglePlaces(open) {
+  const pop = $("places");
+  const willOpen = open ?? pop.hidden;
+  pop.hidden = !willOpen;
+  $("locate-btn").setAttribute("aria-expanded", String(willOpen));
+  if (willOpen) {
+    toggleAlerts(false);
+    $("place-q").value = "";
+    showRecents();
+    $("place-q").focus();
+  }
+}
+
+// Recent places get a × to forget them.
+function listPlaces(places, { recent = false } = {}) {
+  $("place-results").innerHTML = places
+    .map((p, i) => `<li>
+      <button type="button" data-i="${i}"><span class="name">${escapeHtml(p.city)}</span><span class="where">${escapeHtml(p.area)}</span></button>
+      ${recent ? `<button class="forget" type="button" data-forget="${i}" aria-label="Remove ${escapeHtml(p.city)} from recent" title="Remove">×</button>` : ""}
+    </li>`)
+    .join("");
+  $("place-results").onclick = (e) => {
+    e.stopPropagation(); // the list re-renders, so don't let the outside-click check see a detached button
+    const forget = e.target.closest("button[data-forget]");
+    if (forget) {
+      store.set(RECENTS_KEY, places.filter((_, i) => i !== +forget.dataset.forget));
+      showRecents();
+      $("place-q").focus();
+      return;
+    }
+    const btn = e.target.closest("button[data-i]");
+    if (btn) setPlace(places[+btn.dataset.i]);
+  };
+}
+
+function showRecents() {
+  const recents = store.get(RECENTS_KEY) || [];
+  $("place-label").hidden = recents.length === 0;
+  listPlaces(recents, { recent: true });
+}
+
+function showNote(text) {
+  $("place-label").hidden = true;
+  $("place-results").innerHTML = `<li class="note">${text}</li>`;
+}
+
+async function searchPlaces(query) {
+  const seq = ++searchSeq;
+  const params = new URLSearchParams({ name: query, count: 6, language: "en", format: "json" });
+  try {
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params}`);
+    if (!res.ok) throw new Error(`search ${res.status}`);
+    const { results = [] } = await res.json();
+    if (seq !== searchSeq) return; // a newer search has started
+    if (!results.length) return showNote("no places found — try another spelling?");
+    $("place-label").hidden = true;
+    listPlaces(results.map((r) => ({
+      lat: +r.latitude.toFixed(4),
+      lon: +r.longitude.toFixed(4),
+      city: r.name,
+      area: [r.admin1, r.country].filter((x, i, all) => x && all.indexOf(x) === i && x !== r.name).join(", "),
+    })));
+  } catch (err) {
+    console.warn(err);
+    if (seq === searchSeq) showNote("couldn't search right now.");
+  }
+}
+
+function escapeHtml(text = "") {
+  return text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+}
+
+$("locate-btn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  togglePlaces();
+});
+
+$("place-q").addEventListener("input", () => {
+  const q = $("place-q").value.trim();
+  clearTimeout(searchTimer);
+  if (q.length < 2) {
+    searchSeq++;
+    showRecents();
+    return;
+  }
+  searchTimer = setTimeout(() => searchPlaces(q), 250);
+});
+
+$("place-clear").addEventListener("click", (e) => {
+  e.stopPropagation();
+  store.set(RECENTS_KEY, []);
+  showRecents();
+  $("place-q").focus();
+});
+
+// Enter picks the first result
+$("place-q").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("place-results").querySelector("button")?.click();
+});
+
+$("place-here").addEventListener("click", () => {
   if (!("geolocation" in navigator)) {
-    setStatus("your browser can't share its location.");
+    showNote("your browser can't share its location.");
     return;
   }
   const btn = $("locate-btn");
   btn.classList.add("busy");
+  togglePlaces(false);
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       const lat = +pos.coords.latitude.toFixed(4);
       const lon = +pos.coords.longitude.toFixed(4);
       let names = { city: "Your spot", area: `${lat.toFixed(2)}, ${lon.toFixed(2)}` };
       try { names = await reverseGeocode(lat, lon); } catch (err) { console.warn(err); }
-      state.place = { lat, lon, ...names };
-      store.set("dw.place", state.place);
       btn.classList.remove("busy");
-      load();
+      setPlace({ lat, lon, ...names });
     },
     (err) => {
       btn.classList.remove("busy");
@@ -462,8 +710,19 @@ $("locate-btn").addEventListener("click", () => {
   );
 });
 
+document.addEventListener("click", (e) => {
+  if (!$("places").hidden && !e.target.closest("#places")) togglePlaces(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("places").hidden) {
+    togglePlaces(false);
+    $("locate-btn").focus();
+  }
+});
+
 /* ---------- go ---------- */
 
 syncUnitButton();
+if (!reducedMotion.matches) blinkLoop();
 load();
 setInterval(load, 15 * 60 * 1000);

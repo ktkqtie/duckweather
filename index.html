@@ -9,27 +9,78 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..700,100&family=Outfit:wght@300..600&family=Caveat:wght@500;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,100..700,100&family=Outfit:wght@300..600&family=Caveat:wght@500;700&display=swap"
     rel="stylesheet"
   />
   <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Start in the last day/night theme before first paint so the page doesn't flash;
+    // app.js then sets it from the sunrise and sunset at the place shown.
+    try {
+      const theme = JSON.parse(localStorage.getItem("dw.theme"));
+      if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    } catch { /* private mode etc. */ }
+  </script>
 </head>
 <body>
+  <!-- soft sky behind everything; clouds are drawn once below and reused -->
+  <div class="sky" aria-hidden="true">
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <g id="puff-big">
+          <circle cx="62" cy="64" r="26"/><circle cx="96" cy="46" r="36"/><circle cx="134" cy="58" r="28"/>
+          <circle cx="164" cy="72" r="20"/><circle cx="36" cy="76" r="17"/><circle cx="112" cy="76" r="24"/>
+          <circle cx="80" cy="80" r="20"/><circle cx="182" cy="82" r="12"/><circle cx="20" cy="86" r="10"/>
+        </g>
+        <g id="puff-long">
+          <circle cx="30" cy="62" r="16"/><circle cx="56" cy="50" r="24"/><circle cx="86" cy="54" r="21"/>
+          <circle cx="112" cy="60" r="17"/><circle cx="136" cy="66" r="13"/><circle cx="70" cy="68" r="17"/>
+          <circle cx="100" cy="70" r="14"/><circle cx="156" cy="72" r="9"/><circle cx="14" cy="72" r="9"/>
+        </g>
+        <g id="puff-small">
+          <circle cx="44" cy="58" r="13"/><circle cx="64" cy="46" r="17"/><circle cx="84" cy="56" r="12"/>
+          <circle cx="28" cy="64" r="8"/><circle cx="98" cy="64" r="7"/>
+        </g>
+        <!-- each cloud: a cream rim peeking out above a soft gray body -->
+        <symbol id="cloud-big" viewBox="0 0 200 110"><use style="fill: var(--cloud-rim)" href="#puff-big" x="-3" y="-6"/><use style="fill: var(--cloud-body)" href="#puff-big"/></symbol>
+        <symbol id="cloud-long" viewBox="0 0 175 95"><use style="fill: var(--cloud-rim)" href="#puff-long" x="-3" y="-5"/><use style="fill: var(--cloud-body)" href="#puff-long"/></symbol>
+        <symbol id="cloud-small" viewBox="0 0 110 80"><use style="fill: var(--cloud-rim)" href="#puff-small" x="-2" y="-4"/><use style="fill: var(--cloud-body)" href="#puff-small"/></symbol>
+      </defs>
+    </svg>
+    <svg class="cloud c1"><use href="#cloud-big"/></svg>
+    <svg class="cloud c2"><use href="#cloud-long"/></svg>
+    <svg class="cloud c3"><use href="#cloud-small"/></svg>
+    <svg class="cloud c4"><use href="#cloud-big"/></svg>
+    <svg class="cloud c5"><use href="#cloud-long"/></svg>
+  </div>
   <div class="page">
     <header class="topbar">
       <a class="wordmark" href="./">duck<span>weather</span></a>
       <div class="actions">
         <button class="icon-btn" id="unit-btn" type="button" aria-label="Switch to Celsius" title="Switch units">°F</button>
-        <button class="icon-btn" id="locate-btn" type="button" aria-label="Use my location" title="Use my location">
+        <button class="icon-btn" id="locate-btn" type="button" aria-label="Choose a place" aria-expanded="false" aria-controls="places" title="Change place">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" class="fill"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg>
         </button>
+        <div class="popover places" id="places" role="dialog" aria-label="Choose a place" hidden>
+          <p class="popover-title">where to?</p>
+          <input class="place-search" id="place-q" type="search" placeholder="search a city…" autocomplete="off" spellcheck="false" aria-label="Search for a city" />
+          <div class="place-label" id="place-label" hidden>
+            <span>recent</span>
+            <button class="place-clear" id="place-clear" type="button">clear all</button>
+          </div>
+          <ul class="place-results" id="place-results"></ul>
+          <button class="place-here" id="place-here" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" class="fill"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg>
+            use my current location
+          </button>
+        </div>
         <div class="bell-wrap">
-          <button class="icon-btn" id="bell-btn" type="button" aria-label="Weather heads-ups" aria-expanded="false" aria-controls="alerts" title="Heads-ups">
+          <button class="icon-btn" id="bell-btn" type="button" aria-label="Weather heads-up" aria-expanded="false" aria-controls="alerts" title="Heads-up">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg>
             <span class="dot" id="bell-dot" hidden></span>
           </button>
-          <div class="popover" id="alerts" role="dialog" aria-label="Heads-ups" hidden>
-            <p class="popover-title">heads-ups</p>
+          <div class="popover" id="alerts" role="dialog" aria-label="Heads-up" hidden>
+            <p class="popover-title">heads-up</p>
             <ul id="alerts-list"></ul>
           </div>
         </div>
@@ -44,15 +95,19 @@
 
       <section class="hero">
         <div class="duck-side">
-          <div class="bubble" id="advice">wear a hoodie!</div>
-          <img class="duck" id="duck" alt="The weather duck" width="900" height="1062" />
-          <p class="dateline"><span>today</span><span id="date">—</span></p>
+          <div class="duck-rig">
+            <div class="duck-pop" id="duck-pop">
+              <img class="duck" id="duck" alt="The weather duck" width="900" height="1062" />
+              <div class="blink" id="blink" aria-hidden="true"></div>
+            </div>
+          </div>
+          <p class="dateline"><span id="day-name">today</span><span id="date">—</span></p>
         </div>
         <div class="now">
-          <p class="temp"><span id="temp">--</span><span class="deg">°</span></p>
+          <p class="temp"><span class="temp-num"><span id="temp">--</span><span class="deg">°</span></span></p>
           <p class="feel"><span class="cond-icon" id="cond-icon"></span><span id="feel">loading…</span></p>
           <p class="cond" id="cond"></p>
-          <p class="hilo"><span>H: <b id="hi">--</b>°</span><span>L: <b id="lo">--</b>°</span></p>
+          <p class="hilo"><span>H: <b><span id="hi">--</span>°</b></span><span>L: <b><span id="lo">--</span>°</b></span></p>
         </div>
       </section>
 

@@ -34,6 +34,18 @@ const DUCKS = {
 
 const RAIN_DUCK = { img: "assets/ducks/duck-rain.png", advice: "grab an umbrella!" };
 
+// Blinking. Each duck's open eyes (boxes in px on the 900×1062 image) and the face
+// color around them: to blink, the real eyes are covered in that color while copies
+// of them squash shut. The 0, 5 and 10 ducks already have their eyes closed.
+const EYES = [{ x: 326, y: 349, w: 57, h: 51 }, { x: 500, y: 349, w: 57, h: 51 }];
+const BLINKS = {
+  15: { face: "#c3edff", eyes: [{ x: 334, y: 367, w: 57, h: 46 }, { x: 508, y: 367, w: 57, h: 46 }] },
+  rain: { face: "#fae485", eyes: [{ x: 457, y: 472, w: 51, h: 46 }, { x: 608, y: 472, w: 52, h: 46 }] },
+};
+for (let band = 20; band <= 95; band += 5) {
+  BLINKS[band] = { face: band < 70 ? "#ffec8a" : "#fae485", eyes: EYES };
+}
+
 // WMO weather codes: drizzle, rain (incl. freezing), rain showers, thunderstorms.
 function isRaining(code) {
   return (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
